@@ -24,7 +24,9 @@ Sub RunReport()
     Call createSheets()
     Call customFilter("Harvest", "Ylläpito", Sheets("Makrot").Range("A1:A2"))
     Call customFilter("Harvest", "Tiketit", Sheets("Makrot").Range("B1:B2"))
-    
+    Call createPivot("Ylläpito")
+    Call createPivot("Tiketit")
+
     elapsedTime = Round(Timer - startTime, 2)
     workPhases = workPhases & "Suodatus tehty " & elapsedTime & " sekunnissa"
     MsgBox workPhases, vbOKOnly + vbInformation, Title:="Suorituksen tiedot"
@@ -42,7 +44,7 @@ Sub RestoreAll()
     For Each ws In Worksheets
         wsName = ws.Name
         Select Case wsName
-            Case "Harvest", "Ylläpito", "Tiketit"
+            Case "Harvest", "Ylläpito", "Tiketit", "YlläpitoPivot", "TiketitPivot"
                 Sheets(wsName).Delete
         End Select
     Next ws
@@ -79,6 +81,7 @@ Private Sub createLastColumns()
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
     'Purposefully overwrite last column 'URL', it is not used
     ws.Cells(1, lastCol).Value = "Ticket?"
+    ws.Cells(1, lastCol + 1).Value = "TicketText"
     ws.Cells(1, lastCol + 1).Value = "TicketID"
 End Sub
 
@@ -89,8 +92,20 @@ Private Sub fillLastColumns(ByRef dataArray As Variant)
     Dim lastRow As Long
     Dim lastCol As Integer
 
-    notesCol = 6
+    Dim regEx As New RegExp
+    Dim regexResult As String
+    Dim strPattern As String
 
+    strPattern = "(INC|EXT)[0-9]+:"
+
+    With regEx
+        .Global = True
+        .MultiLine = True
+        .IgnoreCase = False
+        .Pattern = strPattern
+    End With
+
+    notesCol = 6
     lastRow = Ubound(dataArray, 1)
     lastCol = Ubound(dataArray, 2)
 
@@ -100,10 +115,11 @@ Private Sub fillLastColumns(ByRef dataArray As Variant)
         'TODO midprio add lower function
         Select Case leftText
             Case "INC", "EXT"
-                dataArray(x, lastCol - 1) = "Yes"
-                dataArray(x, lastCol) = cellText
+                dataArray(x, lastCol - 2) = "Yes"
+                dataArray(x, lastCol - 1) = cellText
+                dataArray(x, lastCol) = regexResult
             Case Else
-                dataArray(x, lastCol - 1) = "No"
+                dataArray(x, lastCol - 2) = "No"
         End Select
     Next x
 
@@ -116,6 +132,8 @@ End Sub
 Private Sub createSheets()
     ThisWorkbook.Sheets.Add.Name = "Ylläpito"
     ThisWorkbook.Sheets.Add.Name = "Tiketit"
+    ThisWorkbook.Sheets.Add.Name = "YlläpitoPivot"
+    ThisWorkbook.Sheets.Add.Name = "TiketitPivot"
 End Sub
 
 Private Sub customFilter(sourceSheet As String, destinationSheet As String, filterRange As Range)
@@ -128,9 +146,76 @@ Private Sub customFilter(sourceSheet As String, destinationSheet As String, filt
 
 End Sub
 
+Private Sub createPivot(sheetName As String)
+    Dim pRange As Range
+    Dim pCache As PivotCache
+    Dim pTable As PivotTable
+    Dim pName As String
+    Dim destinationSheet As String
+    Dim pos As Integer
+
+    Set pRange = ThisWorkbook.Sheets(sheetName).Range("A1").CurrentRegion
+    pName = sheetName & "PivotTable"
+    destinationSheet = sheetName & "Pivot"
+    Set PCache = ActiveWorkbook.PivotCaches.Create(SourceType:=xlDatabase, SourceData:=PRange)
+    Set PTable = PCache.CreatePivotTable(TableDestination:=Sheets(destinationSheet).Cells(2, 2), TableName:=pName)
+
+    pos = 1
+    With PTable.PivotFields("Task")
+        .Orientation = xlRowField
+        .Position = pos
+    End With
+
+    pos = pos + 1
+    If sheetName = "Tiketit" Then
+        With PTable.PivotFields("TicketID")
+            .Orientation = xlRowField
+            .Position = pos
+        End With
+    pos = pos + 1
+    End If
+
+    With PTable.PivotFields("Last Name")
+        .Orientation = xlRowField
+        .Position = pos
+    End With
+
+    With PTable.PivotFields("Hours")
+        .Orientation = xlDataField
+        .Position = 1
+        .Function = xlSum
+        .NumberFormat = "# ##0.00"
+        .Name = "Tunnit "
+    End With
+End Sub
+
 Sub test()
-    'Debug.Print Range("A1:B2").Address
-    Debug.Print Sheets("Filters").includeEU.Value
+    
+
+    Dim regEx As New RegExp
+    Dim regexResult As String
+    Dim testString As String
+    Dim strPattern As String
+
+    strPattern = "(INC|EXT)[0-9]+:"
+
+    With regEx
+        .Global = True
+        .MultiLine = True
+        .IgnoreCase = False
+        .Pattern = strPattern
+    End With
+
+    testString = "INC123:eieui"
+    Debug.Print regEx.test(testString)
+    testString = "INC123:"
+    Debug.Print regEx.test(testString)
+    testString = "EXT123:"
+    Debug.Print regEx.test(testString)
+    testString = "INC123"
+    Debug.Print regEx.test(testString)
+    testString = "INC:"
+    Debug.Print regEx.test(testString)
 End Sub
 
 
