@@ -1,6 +1,5 @@
 Option Explicit
 Option Base 1
-Option Private Module
 
 Dim workPhases As String
 Dim x As Long
