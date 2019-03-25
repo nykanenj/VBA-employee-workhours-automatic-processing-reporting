@@ -33,13 +33,11 @@ Sub RunReport()
 
 End Sub
 
-Sub RestoreAll()
+Sub RestoreAll(restoreDemoData As Boolean)
     
     Dim ws As Worksheet
     Dim wsName As String
     
-    Sheets("HarvestRestore").Visible = True
-
     Application.DisplayAlerts = False
     For Each ws In Worksheets
         wsName = ws.Name
@@ -50,11 +48,14 @@ Sub RestoreAll()
     Next ws
     Application.DisplayAlerts = True
     
-    Sheets("HarvestRestore").Copy Before:=Sheets("HarvestRestore")
-    Sheets(Sheets("HarvestRestore").Index - 1).Name = "Harvest"
-    DoEvents
-    
-    Sheets("HarvestRestore").Visible = False
+    If restoreDemoData Then 
+        Sheets("HarvestRestore").Visible = True
+        Sheets("HarvestRestore").Copy Before:=Sheets("HarvestRestore")
+        Sheets(Sheets("HarvestRestore").Index - 1).Name = "Harvest"
+        Sheets("HarvestRestore").Visible = False
+    Else
+        ThisWorkbook.Sheets.Add.Name = "Harvest"
+    End If
     
     ThisWorkbook.Sheets("Makrot").Activate
     DoEvents
@@ -82,7 +83,7 @@ Private Sub createLastColumns()
     'Purposefully overwrite last column 'URL', it is not used
     ws.Cells(1, lastCol).Value = "Ticket?"
     ws.Cells(1, lastCol + 1).Value = "TicketText"
-    ws.Cells(1, lastCol + 1).Value = "TicketID"
+    ws.Cells(1, lastCol + 2).Value = "TicketID"
 End Sub
 
 Private Sub fillLastColumns(ByRef dataArray As Variant)
@@ -92,18 +93,8 @@ Private Sub fillLastColumns(ByRef dataArray As Variant)
     Dim lastRow As Long
     Dim lastCol As Integer
 
-    Dim regEx As New RegExp
-    Dim regexResult As String
-    Dim strPattern As String
-
-    strPattern = "(INC|EXT)[0-9]+:"
-
-    With regEx
-        .Global = True
-        .MultiLine = True
-        .IgnoreCase = False
-        .Pattern = strPattern
-    End With
+    Dim splitText() As String
+    Dim isTicket As Boolean
 
     notesCol = 6
     lastRow = Ubound(dataArray, 1)
@@ -111,13 +102,14 @@ Private Sub fillLastColumns(ByRef dataArray As Variant)
 
     For x = 2 to lastRow
         cellText = dataArray(x, notesCol)
-        leftText = Left(cellText, 3)
+        isTicket = regexTest(cellText, "^(INC|EXT)[0-9]+:")
         'TODO midprio add lower function
-        Select Case leftText
-            Case "INC", "EXT"
+        Select Case isTicket
+            Case True
+                splitText = Split(cellText, ":", 2)
                 dataArray(x, lastCol - 2) = "Yes"
                 dataArray(x, lastCol - 1) = cellText
-                dataArray(x, lastCol) = regexResult
+                dataArray(x, lastCol) = splitText(0)
             Case Else
                 dataArray(x, lastCol - 2) = "No"
         End Select
@@ -188,6 +180,21 @@ Private Sub createPivot(sheetName As String)
         .Name = "Tunnit "
     End With
 End Sub
+
+Private Function regexTest(text As String, regexPattern) As Boolean
+
+    Dim regExpr As New RegExp
+
+    With regExpr
+        .Global = True
+        .MultiLine = True
+        .IgnoreCase = False
+        .Pattern = regexPattern
+    End With
+
+    regexTest = regExpr.Test(text)
+
+End Function
 
 Sub test()
     
